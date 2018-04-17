@@ -1,5 +1,5 @@
 # elk-collectd
-[Collectd](http://collectd.org) plugins to get some stats and metrics from [Elasticsearch](https://www.elastic.co/products/elasticsearch) and [Logstash](https://www.elastic.co/products/logstash).
+[Collectd](https://collectd.org) plugins to get some stats and metrics from [Elasticsearch](https://www.elastic.co/products/elasticsearch) and [Logstash](https://www.elastic.co/products/logstash). Using [collectd-python](https://collectd.org/documentation/manpages/collectd-python.5.shtml).
 
 ## Requirements
  * collectd 4.9+
