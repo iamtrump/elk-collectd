@@ -32,9 +32,9 @@ LoadPlugin python
   ModulePath "/usr/share/collectd/plugins"
   Import "logstash-collectd"
   <Module "logstash-collectd">
-    Host localhost # logstash host, default is localhost
+    Host "localhost" # logstash host, default is localhost
     Port 9600 # logstash API port, default is 9600
-    Name logstash instance name, default is logstash
+    Name "logstash" # instance name, default is logstash
   </Module>
 <Plugin>
 ```
