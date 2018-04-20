@@ -10,14 +10,15 @@ CONFIG_DEFAULT = [{
   "host": "localhost",
   "port": "9200",
   "node": "elasticsearch",
-  "url": "http://localhost:9200/_nodes/stats",
+  "url_nodes": "http://localhost:9200/_nodes/stats",
+  "url_cluster": "http://localhost:9200/_cluster/health",
   "timeout": 20
 }]
 
 stat = collections.namedtuple('Stat', ('type', 'path'))
 
 # Metrics dictionary
-STATS = {
+STATS_NODES = {
   # Threads
   '%s.jvm.threads.count': stat('gauge', 'nodes.%s.jvm.threads.count'),
   '%s.jvm.threads.peak_count': stat('gauge', 'nodes.%s.jvm.threads.peak_count'),
@@ -102,36 +103,65 @@ STATS = {
 
 # Thread pools
 for thread_pool in ["bulk", "fetch_shard_started", "fetch_shard_store", "flush", "force_merge", "generic", "get", "index", "listener", "management", "refresh", "search", "snapshot", "warmer"]:
-  STATS['%s.thread_pool.'+thread_pool+'.threads'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.threads')
-  STATS['%s.thread_pool.'+thread_pool+'.queue'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.queue')
-  STATS['%s.thread_pool.'+thread_pool+'.active'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.active')
-  STATS['%s.thread_pool.'+thread_pool+'.rejected'] = stat('counter', 'nodes.%s.thread_pool.'+thread_pool+'.rejected')
-  STATS['%s.thread_pool.'+thread_pool+'.largest'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.largest')
-  STATS['%s.thread_pool.'+thread_pool+'.completed'] = stat('counter', 'nodes.%s.thread_pool.'+thread_pool+'.completed')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.threads'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.threads')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.queue'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.queue')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.active'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.active')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.rejected'] = stat('counter', 'nodes.%s.thread_pool.'+thread_pool+'.rejected')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.largest'] = stat('gauge', 'nodes.%s.thread_pool.'+thread_pool+'.largest')
+  STATS_NODES['%s.thread_pool.'+thread_pool+'.completed'] = stat('counter', 'nodes.%s.thread_pool.'+thread_pool+'.completed')
+
+# Cluster stats
+STATS_CLUSTER = {
+  'cluster.nodes.number_of_nodes': stat('gauge', 'number_of_nodes'),
+  'cluster.nodes.number_of_data_nodes': stat('gauge', 'number_of_data_nodes'),
+  'cluster.shards.active_primary': stat('gauge', 'active_primary_shards'),
+  'cluster.shards.active': stat('gauge', 'active_shards'),
+  'cluster.shards.relocating': stat('gauge', 'relocating_shards'),
+  'cluster.shards.initializing': stat('gauge', 'initializing_shards'),
+  'cluster.shards.unassigned': stat('gauge', 'unassigned_shards'),
+  'cluster.shards.delayed_unassigned': stat('gauge', 'delayed_unassigned_shards'),
+  'cluster.number_of_pending_tasks': stat('gauge', 'number_of_pending_tasks'),
+  'cluster.number_of_in_flight_fetch': stat('gauge', 'number_of_in_flight_fetch'),
+  'cluster.task_max_waiting_in_queue': stat('gauge', 'task_max_waiting_in_queue_millis'),
+  'cluster.active_shards_percent': stat('gauge', 'active_shards_percent_as_number'),
+}
 
 def fetch_stats():
   global CONFIGS
   if not CONFIGS: CONFIGS = CONFIG_DEFAULT
   for config in CONFIGS:
     try:
-      stats = json.load(urllib2.urlopen(config["url"], timeout=config["timeout"]))
+      stats_nodes = json.load(urllib2.urlopen(config["url_nodes"], timeout=config["timeout"]))
     except Exception as err:
-      collectd.error("Logstash plugin ("+config["node"]+"): Error fetching stats from "+config["url"]+": "+str(err))
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching nodes stats from "+config["url_nodes"]+": "+str(err))
       return None
-    parse_stats(stats, config)
+    try:
+      stats_cluster = json.load(urllib2.urlopen(config["url_cluster"], timeout=config["timeout"]))
+    except Exception as err:
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster"]+": "+str(err))
+      return None
+    parse_stats(dict(stats_nodes.items()+stats_cluster.items()), config)
 
 def parse_stats(json, config):
   nodes = json['nodes'].keys()
   for node in nodes:
     es_node = reduce(lambda x, y: x[y], ["nodes", node, "name"], json).replace(".", "_")
-    for name, stat in STATS.iteritems():
-      path = (STATS[name].path % node).split('.')
+    for name, stat in STATS_NODES.iteritems():
+      path = (STATS_NODES[name].path % node).split('.')
       try:
         value = reduce(lambda x, y: x[y], path, json)
       except Exception as err:
-        collectd.warning("Logstash plugin ("+config["node"]+"): Could not process path "+STATS[name].path+": "+str(err))
+        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES[name].path+": "+str(err))
         continue
       dispatch_stat(name % es_node, value, stat.type, config)
+  for name, stat in STATS_CLUSTER.iteritems():
+    path = STATS_CLUSTER[name].path.split('.')
+    try:
+      value = reduce(lambda x, y: x[y], path, json)
+    except Exception as err:
+      collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER[name].path+": "+str(err))
+      continue
+    dispatch_stat(name, value, stat.type, config)
 
 def dispatch_stat(stat_name, stat_value, stat_type, config):
   val = collectd.Values(plugin=config["node"])
@@ -154,12 +184,13 @@ def config_callback(config):
     elif config.key == "Port": port = str(int(config.values[0]))
     elif config.key == "Name": node = str(config.values[0])
     elif config.key == "Timeout": timeout = int(config.values[0])
-    else: collectd.warning("Logstash plugin: Unknown config key "+config.key)
+    else: collectd.warning("Elasticsearch plugin: Unknown config key "+config.key)
     CONFIGS.append({
       "host": host,
       "port": port,
       "node": node,
-      "url": "http://"+host+":"+port+"/_node/stats",
+      "url_nodes": "http://"+host+":"+port+"/_node/stats",
+      "url_cluster": "http://"+host+":"+port+"/_cluster/health",
       "timeout": timeout
     })
 
