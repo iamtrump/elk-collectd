@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python
 
 import collectd
 import collections
@@ -59,35 +59,35 @@ STATS_NODES = {
   '%s.process.total_cpu_time': stat('gauge', 'nodes.%s.process.cpu.total_in_millis'),
   '%s.process.total_virtual_memory': stat('gauge', 'nodes.%s.process.mem.total_virtual_in_bytes'),
 
-  # Indeces
-  '%s.indeces.index_total': stat('counter', 'nodes.%s.indices.indexing.index_total'),
-  '%s.indeces.index_current': stat('gauge', 'nodes.%s.indices.indexing.index_current'),
-  '%s.indeces.index_failed': stat('counter', 'nodes.%s.indices.indexing.index_failed'),
-  '%s.indeces.index_time': stat('counter', 'nodes.%s.indices.indexing.index_time_in_millis'),
+  # Indices
+  '%s.indices.index_total': stat('counter', 'nodes.%s.indices.indexing.index_total'),
+  '%s.indices.index_current': stat('gauge', 'nodes.%s.indices.indexing.index_current'),
+  '%s.indices.index_failed': stat('counter', 'nodes.%s.indices.indexing.index_failed'),
+  '%s.indices.index_time': stat('counter', 'nodes.%s.indices.indexing.index_time_in_millis'),
 
-  '%s.indeces.delete_total': stat('counter', 'nodes.%s.indices.indexing.delete_total'),
-  '%s.indeces.delete_current': stat('gauge', 'nodes.%s.indices.indexing.delete_current'),
-  '%s.indeces.delete_time': stat('counter', 'nodes.%s.indices.indexing.delete_time_in_millis'),
+  '%s.indices.delete_total': stat('counter', 'nodes.%s.indices.indexing.delete_total'),
+  '%s.indices.delete_current': stat('gauge', 'nodes.%s.indices.indexing.delete_current'),
+  '%s.indices.delete_time': stat('counter', 'nodes.%s.indices.indexing.delete_time_in_millis'),
 
-  '%s.indeces.query_total': stat('counter', 'nodes.%s.indices.search.query_total'),
-  '%s.indeces.query_current': stat('gauge', 'nodes.%s.indices.search.query_current'),
-  '%s.indeces.query_time': stat('counter', 'nodes.%s.indices.search.query_time_in_millis'),
+  '%s.indices.query_total': stat('counter', 'nodes.%s.indices.search.query_total'),
+  '%s.indices.query_current': stat('gauge', 'nodes.%s.indices.search.query_current'),
+  '%s.indices.query_time': stat('counter', 'nodes.%s.indices.search.query_time_in_millis'),
   
-  '%s.indeces.fetch_total': stat('counter', 'nodes.%s.indices.search.fetch_total'),
-  '%s.indeces.fetch_current': stat('gauge', 'nodes.%s.indices.search.fetch_current'),
-  '%s.indeces.fetch_time': stat('counter', 'nodes.%s.indices.search.fetch_time_in_millis'),
+  '%s.indices.fetch_total': stat('counter', 'nodes.%s.indices.search.fetch_total'),
+  '%s.indices.fetch_current': stat('gauge', 'nodes.%s.indices.search.fetch_current'),
+  '%s.indices.fetch_time': stat('counter', 'nodes.%s.indices.search.fetch_time_in_millis'),
 
-  '%s.indeces.merges_total': stat('counter', 'nodes.%s.indices.merges.total'),
-  '%s.indeces.merges_current': stat('gauge', 'nodes.%s.indices.merges.current'),
-  '%s.indeces.merges_time': stat('counter', 'nodes.%s.indices.merges.total_time_in_millis'),
+  '%s.indices.merges_total': stat('counter', 'nodes.%s.indices.merges.total'),
+  '%s.indices.merges_current': stat('gauge', 'nodes.%s.indices.merges.current'),
+  '%s.indices.merges_time': stat('counter', 'nodes.%s.indices.merges.total_time_in_millis'),
 
-  '%s.indeces.refresh': stat('counter', 'nodes.%s.indices.refresh.total'),
-  '%s.indeces.refresh_time': stat('counter', 'nodes.%s.indices.refresh.total_time_in_millis'),
+  '%s.indices.refresh': stat('counter', 'nodes.%s.indices.refresh.total'),
+  '%s.indices.refresh_time': stat('counter', 'nodes.%s.indices.refresh.total_time_in_millis'),
 
-  '%s.indeces.translog': stat('counter', 'nodes.%s.indices.translog.operations'),
-  '%s.indeces.translog_size': stat('gauge', 'nodes.%s.indices.translog.size_in_bytes'),
-  '%s.indeces.translog_uncommitted': stat('gauge', 'nodes.%s.indices.translog.uncommitted_operations'),
-  '%s.indeces.translog_uncommitted_size': stat('gauge', 'nodes.%s.indices.translog.uncommitted_size_in_bytes'),
+  '%s.indices.translog': stat('counter', 'nodes.%s.indices.translog.operations'),
+  '%s.indices.translog_size': stat('gauge', 'nodes.%s.indices.translog.size_in_bytes'),
+  '%s.indices.translog_uncommitted': stat('gauge', 'nodes.%s.indices.translog.uncommitted_operations'),
+  '%s.indices.translog_uncommitted_size': stat('gauge', 'nodes.%s.indices.translog.uncommitted_size_in_bytes'),
 
   # Transport
   '%s.transport.server_open': stat('gauge', 'nodes.%s.transport.server_open'),
