@@ -22,7 +22,7 @@ LoadPlugin python
   Import "elacticseach-collectd"
   <Module "elacticseach-collectd">
     Host "localhost" # elasticsearch host, default is localhost
-    Port "9200" # elasticsearch API port, default is 9200
+    Port 9200 # elasticsearch API port, default is 9200
     Name "elasticsearch" # instance name, default is elasticsearch
     Timeout 20 # stat fetching timeout in secs, default is 20
   </Module>
