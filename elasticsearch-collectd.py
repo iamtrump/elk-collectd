@@ -2,6 +2,7 @@
 
 import collectd
 import collections
+import datetime
 import json
 import urllib2
 
@@ -13,6 +14,7 @@ CONFIG_DEFAULT = [{
   "url_nodes": "http://localhost:9200/_nodes/stats",
   "url_cluster_health": "http://localhost:9200/_cluster/health",
   "url_cluster_stats": "http://localhost:9200/_cluster/stats",
+  "url_daily_index_stats": "http://localhost:9200/%s/_stats/store",
   "stats_enabled": ["nodes", "cluster_health"],
   "timeout": 20
 }]
@@ -140,6 +142,15 @@ STATS_CLUSTER_STATS = {
   "indices.docs.deleted": stat("counter", "indices.docs.deleted"),
 }
 
+# Index stats
+STATS_INDEX = {
+  "daily_index.primaries": stat("bytes", "indices.%s.primaries.store.size_in_bytes"),
+  "daily_index.total": stat("bytes", "indices.%s.total.store.size_in_bytes"),
+}
+
+def todays_index():
+      return datetime.datetime.utcnow().strftime("logstash-%Y.%m.%d")
+
 def fetch_stats():
   global CONFIGS
   if not CONFIGS: CONFIGS = CONFIG_DEFAULT
@@ -165,6 +176,14 @@ def fetch_stats():
         total_stats["cluster_stats"] = stats_cluster_stats
     except Exception as err:
       collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster_stats"]+": "+str(err))
+      return None
+    try:
+      url = config["url_daily_index_stats"] % todays_index()
+      if "daily_index_stats" in config["stats_enabled"]:
+        stats_daily_index_stats = json.load(urllib2.urlopen(url, timeout=config["timeout"]))
+        total_stats["daily_index_stats"] = stats_daily_index_stats
+    except Exception as err:
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching index stats from "+url+": "+str(err))
       return None
     parse_stats(total_stats, config)
 
@@ -199,6 +218,17 @@ def parse_stats(json, config):
         collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER_STATS[name].path+": "+str(err))
         continue
       dispatch_stat(name, value, stat.type, config)
+  if "daily_index_stats" in config["stats_enabled"]:
+    index = json["daily_index_stats"]["indices"].keys()[0]
+    for name, stat in STATS_INDEX.iteritems():
+      path = STATS_INDEX[name].path.split(".")
+      path = map(lambda x: x % index if x == "%s" else x, path)
+      try:
+        value = reduce(lambda x, y: x[y], path, json["daily_index_stats"])
+      except Exception as err:
+        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_INDEX[name].path+": "+str(err))
+        continue
+      dispatch_stat(name, value, stat.type, config)
 
 def dispatch_stat(stat_name, stat_value, stat_type, config):
   val = collectd.Values(plugin=config["node"])
@@ -231,6 +261,7 @@ def config_callback(config):
       "url_nodes": "http://"+host+":"+port+"/_node/stats",
       "url_cluster_health": "http://"+host+":"+port+"/_cluster/health",
       "url_cluster_stats": "http://"+host+":"+port+"/_cluster/stats",
+      "url_daily_index_stats": "http://"+host+":"+port+"/%s/_stats/store",
       "stats_enabled": stats_enabled,
       "timeout": timeout
     })
