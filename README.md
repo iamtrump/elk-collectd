@@ -19,8 +19,8 @@ LoadPlugin python
 
 <Plugin python>
   ModulePath "/usr/share/collectd/plugins"
-  Import "elacticseach-collectd"
-  <Module "elacticseach-collectd">
+  Import "elasticsearch-collectd"
+  <Module "elasticsearch-collectd">
     Host "localhost" # elasticsearch host, default is localhost
     Port 9200 # elasticsearch API port, default is 9200
     Name "elasticsearch" # instance name, default is elasticsearch
