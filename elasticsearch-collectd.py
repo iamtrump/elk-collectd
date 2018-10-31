@@ -11,8 +11,9 @@ CONFIG_DEFAULT = [{
   "port": "9200",
   "node": "elasticsearch",
   "url_nodes": "http://localhost:9200/_nodes/stats",
-  "url_cluster": "http://localhost:9200/_cluster/health",
-  "stats_enabled": ["nodes", "cluster"],
+  "url_cluster_health": "http://localhost:9200/_cluster/health",
+  "url_cluster_stats": "http://localhost:9200/_cluster/stats",
+  "stats_enabled": ["nodes", "cluster_health"],
   "timeout": 20
 }]
 
@@ -111,8 +112,8 @@ for thread_pool in ["bulk", "fetch_shard_started", "fetch_shard_store", "flush",
   STATS_NODES["%s.thread_pool."+thread_pool+".largest"] = stat("gauge", "nodes.%s.thread_pool."+thread_pool+".largest")
   STATS_NODES["%s.thread_pool."+thread_pool+".completed"] = stat("counter", "nodes.%s.thread_pool."+thread_pool+".completed")
 
-# Cluster stats
-STATS_CLUSTER = {
+# Cluster health stats
+STATS_CLUSTER_HEALTH = {
   "cluster.nodes.number_of_nodes": stat("gauge", "number_of_nodes"),
   "cluster.nodes.number_of_data_nodes": stat("gauge", "number_of_data_nodes"),
   "cluster.shards.active_primary": stat("gauge", "active_primary_shards"),
@@ -127,6 +128,18 @@ STATS_CLUSTER = {
   "cluster.active_shards_percent": stat("gauge", "active_shards_percent_as_number"),
 }
 
+# Cluster stats
+STATS_CLUSTER_STATS = {
+  "nodes.fs.available_in_bytes": stat("bytes", "nodes.fs.available_in_bytes"),
+  "nodes.fs.total_in_bytes": stat("bytes", "nodes.fs.total_in_bytes"),
+  "indices.count": stat("gauge", "indices.count"),
+  "indices.shards.total": stat("gauge", "indices.shards.total"),
+  "indices.shards.primaries": stat("gauge", "indices.shards.primaries"),
+  "indices.shards.replication": stat("gauge", "indices.shards.replication"),
+  "indices.docs.count": stat("gauge", "indices.docs.count"),
+  "indices.docs.deleted": stat("gauge", "indices.docs.deleted"),
+}
+
 def fetch_stats():
   global CONFIGS
   if not CONFIGS: CONFIGS = CONFIG_DEFAULT
@@ -135,39 +148,55 @@ def fetch_stats():
     try:
       if "nodes" in config["stats_enabled"]:
         stats_nodes = json.load(urllib2.urlopen(config["url_nodes"], timeout=config["timeout"]))
-        total_stats.update(stats_nodes.items())
+        total_stats["nodes"] = stats_nodes
     except Exception as err:
       collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching nodes stats from "+config["url_nodes"]+": "+str(err))
       return None
     try:
-      if "cluster" in config["stats_enabled"]:
-        stats_cluster = json.load(urllib2.urlopen(config["url_cluster"], timeout=config["timeout"]))
-        total_stats.update(stats_cluster.items())
+      if "cluster_health" in config["stats_enabled"]:
+        stats_cluster_health = json.load(urllib2.urlopen(config["url_cluster_health"], timeout=config["timeout"]))
+        total_stats["cluster_health"] = stats_cluster_health
     except Exception as err:
-      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster"]+": "+str(err))
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster health from "+config["url_cluster_health"]+": "+str(err))
+      return None
+    try:
+      if "cluster_stats" in config["stats_enabled"]:
+        stats_cluster_stats = json.load(urllib2.urlopen(config["url_cluster_stats"], timeout=config["timeout"]))
+        total_stats["cluster_stats"] = stats_cluster_stats
+    except Exception as err:
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster_stats"]+": "+str(err))
       return None
     parse_stats(total_stats, config)
 
 def parse_stats(json, config):
   if "nodes" in config["stats_enabled"]:
-    nodes = json["nodes"].keys()
+    nodes = json["nodes"]["nodes"].keys()
     for node in nodes:
-      es_node = reduce(lambda x, y: x[y], ["nodes", node, "name"], json).replace(".", "_")
+      es_node = reduce(lambda x, y: x[y], ["nodes", node, "name"], json["nodes"]).replace(".", "_")
       for name, stat in STATS_NODES.iteritems():
         path = (STATS_NODES[name].path % node).split(".")
         try:
-          value = reduce(lambda x, y: x[y], path, json)
+          value = reduce(lambda x, y: x[y], path, json["nodes"])
         except Exception as err:
           collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES[name].path+": "+str(err))
           continue
         dispatch_stat(name % es_node, value, stat.type, config)
-  if "cluster" in config["stats_enabled"]:
-    for name, stat in STATS_CLUSTER.iteritems():
-      path = STATS_CLUSTER[name].path.split(".")
+  if "cluster_health" in config["stats_enabled"]:
+    for name, stat in STATS_CLUSTER_HEALTH.iteritems():
+      path = STATS_CLUSTER_HEALTH[name].path.split(".")
       try:
-        value = reduce(lambda x, y: x[y], path, json)
+        value = reduce(lambda x, y: x[y], path, json["cluster_health"])
       except Exception as err:
-        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER[name].path+": "+str(err))
+        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER_HEALTH[name].path+": "+str(err))
+        continue
+      dispatch_stat(name, value, stat.type, config)
+  if "cluster_stats" in config["stats_enabled"]:
+    for name, stat in STATS_CLUSTER_STATS.iteritems():
+      path = STATS_CLUSTER_STATS[name].path.split(".")
+      try:
+        value = reduce(lambda x, y: x[y], path, json["cluster_stats"])
+      except Exception as err:
+        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER_STATS[name].path+": "+str(err))
         continue
       dispatch_stat(name, value, stat.type, config)
 
@@ -199,8 +228,9 @@ def config_callback(config):
       "host": host,
       "port": port,
       "node": node,
-      "url_nodes": "http://"+host+":"+port+"/_nodes/stats",
-      "url_cluster": "http://"+host+":"+port+"/_cluster/health",
+      "url_nodes": "http://"+host+":"+port+"/_node/stats",
+      "url_cluster_health": "http://"+host+":"+port+"/_cluster/health",
+      "url_cluster_stats": "http://"+host+":"+port+"/_cluster/stats",
       "stats_enabled": stats_enabled,
       "timeout": timeout
     })
