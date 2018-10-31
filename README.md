@@ -24,6 +24,7 @@ LoadPlugin python
     Host "localhost" # elasticsearch host, default is localhost
     Port 9200 # elasticsearch API port, default is 9200
     Name "elasticsearch" # instance name, default is elasticsearch
+    Stats_enabled "nodes cluster" # Which stats you should check, default is to check both nodes and cluster
     Timeout 20 # stat fetching timeout in secs, default is 20
   </Module>
 <Plugin>

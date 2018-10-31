@@ -12,6 +12,7 @@ CONFIG_DEFAULT = [{
   "node": "elasticsearch",
   "url_nodes": "http://localhost:9200/_nodes/stats",
   "url_cluster": "http://localhost:9200/_cluster/health",
+  "stats_enabled": ["nodes", "cluster"],
   "timeout": 20
 }]
 
@@ -130,38 +131,45 @@ def fetch_stats():
   global CONFIGS
   if not CONFIGS: CONFIGS = CONFIG_DEFAULT
   for config in CONFIGS:
+    total_stats = dict()
     try:
-      stats_nodes = json.load(urllib2.urlopen(config["url_nodes"], timeout=config["timeout"]))
+      if "nodes" in config["stats_enabled"]:
+        stats_nodes = json.load(urllib2.urlopen(config["url_nodes"], timeout=config["timeout"]))
+        total_stats.update(stats_nodes.items())
     except Exception as err:
       collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching nodes stats from "+config["url_nodes"]+": "+str(err))
       return None
     try:
-      stats_cluster = json.load(urllib2.urlopen(config["url_cluster"], timeout=config["timeout"]))
+      if "cluster" in config["stats_enabled"]:
+        stats_cluster = json.load(urllib2.urlopen(config["url_cluster"], timeout=config["timeout"]))
+        total_stats.update(stats_cluster.items())
     except Exception as err:
       collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster"]+": "+str(err))
       return None
-    parse_stats(dict(stats_nodes.items()+stats_cluster.items()), config)
+    parse_stats(total_stats, config)
 
 def parse_stats(json, config):
-  nodes = json["nodes"].keys()
-  for node in nodes:
-    es_node = reduce(lambda x, y: x[y], ["nodes", node, "name"], json).replace(".", "_")
-    for name, stat in STATS_NODES.iteritems():
-      path = (STATS_NODES[name].path % node).split(".")
+  if "nodes" in config["stats_enabled"]:
+    nodes = json["nodes"].keys()
+    for node in nodes:
+      es_node = reduce(lambda x, y: x[y], ["nodes", node, "name"], json).replace(".", "_")
+      for name, stat in STATS_NODES.iteritems():
+        path = (STATS_NODES[name].path % node).split(".")
+        try:
+          value = reduce(lambda x, y: x[y], path, json)
+        except Exception as err:
+          collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES[name].path+": "+str(err))
+          continue
+        dispatch_stat(name % es_node, value, stat.type, config)
+  if "cluster" in config["stats_enabled"]:
+    for name, stat in STATS_CLUSTER.iteritems():
+      path = STATS_CLUSTER[name].path.split(".")
       try:
         value = reduce(lambda x, y: x[y], path, json)
       except Exception as err:
-        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES[name].path+": "+str(err))
+        collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER[name].path+": "+str(err))
         continue
-      dispatch_stat(name % es_node, value, stat.type, config)
-  for name, stat in STATS_CLUSTER.iteritems():
-    path = STATS_CLUSTER[name].path.split(".")
-    try:
-      value = reduce(lambda x, y: x[y], path, json)
-    except Exception as err:
-      collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER[name].path+": "+str(err))
-      continue
-    dispatch_stat(name, value, stat.type, config)
+      dispatch_stat(name, value, stat.type, config)
 
 def dispatch_stat(stat_name, stat_value, stat_type, config):
   val = collectd.Values(plugin=config["node"])
@@ -179,11 +187,13 @@ def config_callback(config):
     host = CONFIG_DEFAULT[0]["host"]
     port = CONFIG_DEFAULT[0]["port"]
     node = CONFIG_DEFAULT[0]["node"]
+    stats_enabled = CONFIG_DEFAULT[0]["stats_enabled"]
     timeout = CONFIG_DEFAULT[0]["timeout"]
     if config.key == "Host": host = str(config.values[0])
     elif config.key == "Port": port = str(int(config.values[0]))
     elif config.key == "Name": node = str(config.values[0])
     elif config.key == "Timeout": timeout = int(config.values[0])
+    elif config.key == "Stats_enabled": stats_enabled = config.values[0].split(" ")
     else: collectd.warning("Elasticsearch plugin: Unknown config key "+config.key)
     CONFIGS.append({
       "host": host,
@@ -191,6 +201,7 @@ def config_callback(config):
       "node": node,
       "url_nodes": "http://"+host+":"+port+"/_nodes/stats",
       "url_cluster": "http://"+host+":"+port+"/_cluster/health",
+      "stats_enabled": stats_enabled,
       "timeout": timeout
     })
 
