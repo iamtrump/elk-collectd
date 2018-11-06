@@ -18,6 +18,7 @@ To use it with different version of Filebeat, Logstash or Elasticsearch you prob
 
 ## Configuration
 1. `collectd.conf`:
+
 ```
 LoadPlugin python
 
@@ -48,7 +49,7 @@ LoadPlugin python
     Host "localhost" # elasticsearch host, default is localhost
     Port 9200 # elasticsearch API port, default is 9200
     Name "elasticsearch" # instance name, default is elasticsearch
-    Stats_enabled "nodes cluster_health" # Which stats you should check, default is to check both nodes and cluster_health
+    Stats "nodes_stats cluster_health cluster_stats" # space separated list of stats to fetch, available stats: nodes_stats, cluster_health, cluster_stats; all enabled by default
     Timeout 20 # stat fetching timeout in secs, default is 20
   </Module>
 <Plugin>
