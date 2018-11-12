@@ -112,6 +112,13 @@ for thread_pool in ["bulk", "fetch_shard_started", "fetch_shard_store", "flush",
   STATS_NODES_STATS["nodes.%s.thread_pool."+thread_pool+".largest"] = stat("gauge", "nodes/%s/thread_pool/"+thread_pool+"/largest")
   STATS_NODES_STATS["nodes.%s.thread_pool."+thread_pool+".completed"] = stat("counter", "nodes/%s/thread_pool/"+thread_pool+"/completed")
 
+# Breakers
+for breaker in ["accounting", "fielddata", "in_flight_requests", "parent", "request"]:
+  STATS_NODES_STATS["nodes.%s.breakers."+breaker+".estimated_size"] = stat("gauge", "nodes/%s/breakers/"+breaker+"/estimated_size_in_bytes")
+  STATS_NODES_STATS["nodes.%s.breakers."+breaker+".limit_size"] = stat("gauge", "nodes/%s/breakers/"+breaker+"/limit_size_in_bytes")
+  STATS_NODES_STATS["nodes.%s.breakers."+breaker+".overhead"] = stat("gauge", "nodes/%s/breakers/"+breaker+"/overhead")
+  STATS_NODES_STATS["nodes.%s.breakers."+breaker+".tripped"] = stat("counter", "nodes/%s/breakers/"+breaker+"/tripped")
+
 # Cluster health stats
 STATS_CLUSTER_HEALTH = {
   "cluster.nodes.number_of_nodes": stat("gauge", "number_of_nodes"),
