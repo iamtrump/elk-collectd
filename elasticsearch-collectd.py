@@ -4,6 +4,7 @@ import collectd
 import collections
 import json
 import urllib2
+from datetime import datetime
 
 CONFIGS = []
 CONFIG_DEFAULT = [{
@@ -13,7 +14,9 @@ CONFIG_DEFAULT = [{
   "url_nodes_stats": "http://localhost:9200/_nodes/stats",
   "url_cluster_health": "http://localhost:9200/_cluster/health",
   "url_cluster_stats": "http://localhost:9200/_cluster/stats",
-  "stats": ["nodes_stats", "cluster_health", "cluster_stats"],
+  "url_indices_stats": "http://localhost:9200/_stats/store",
+  "stats": ["nodes_stats", "cluster_health", "cluster_stats", "indices_stats"],
+  "indices": ["logstash-%Y.%m.%d"],
   "timeout": 20
 }]
 
@@ -137,14 +140,20 @@ STATS_CLUSTER_HEALTH = {
 
 # Cluster stats
 STATS_CLUSTER_STATS = {
-  "fs.available": stat("gauge", "nodes/fs/available_in_bytes"),
-  "fs.total": stat("gauge", "nodes/fs/total_in_bytes"),
-  "indices.count": stat("gauge", "indices/count"),
-  "indices.shards.total": stat("gauge", "indices/shards/total"),
-  "indices.shards.primaries": stat("gauge", "indices/shards/primaries"),
-  "indices.shards.replication": stat("gauge", "indices/shards/replication"),
-  "indices.docs.count": stat("gauge", "indices/docs/count"),
-  "indices.docs.deleted": stat("gauge", "indices/docs/deleted"),
+  "cluster.fs.available": stat("gauge", "nodes/fs/available_in_bytes"),
+  "cluster.fs.total": stat("gauge", "nodes/fs/total_in_bytes"),
+  "cluster.indices_count": stat("gauge", "indices/count"),
+  "cluster.shards.total": stat("gauge", "indices/shards/total"),
+  "cluster.shards.primaries": stat("gauge", "indices/shards/primaries"),
+  "cluster.shards.replication": stat("gauge", "indices/shards/replication"),
+  "cluster.docs.total": stat("gauge", "indices/docs/count"),
+  "cluster.docs.deleted": stat("gauge", "indices/docs/deleted"),
+}
+
+# Indices stats
+STATS_INDICES_STATS = {
+  "indices.%s.primaries_size": stat("gauge", "indices/%s/primaries/store/size_in_bytes"),
+  "indices.%s.total_size": stat("gauge", "indices/%s/total/store/size_in_bytes"),
 }
 
 def extract_value(json, path):
@@ -176,6 +185,12 @@ def fetch_stats():
     except Exception as err:
       collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching cluster stats from "+config["url_cluster_stats"]+": "+str(err))
       return None
+    try:
+      if "indices_stats" in config["stats"]:
+        total_stats["indices_stats"] = json.load(urllib2.urlopen(config["url_indices_stats"], timeout=config["timeout"]))
+    except Exception as err:
+      collectd.error("Elasticsearch plugin ("+config["node"]+"): Error fetching indices stats from "+config["url_indices_stats"]+": "+str(err))
+      return None
     parse_stats(total_stats, config)
 
 def parse_stats(json, config):
@@ -187,7 +202,7 @@ def parse_stats(json, config):
         try:
           value = extract_value(json["nodes_stats"], STATS_NODES_STATS[name].path % node)
         except Exception as err:
-          collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES_STATS[name].path+": "+str(err))
+          collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_NODES_STATS[name].path+" for node "+es_node+": "+str(err))
           continue
         dispatch_stat(name % es_node, value, stat.type, config)
   if "cluster_health" in config["stats"]:
@@ -206,6 +221,16 @@ def parse_stats(json, config):
         collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_CLUSTER_STATS[name].path+": "+str(err))
         continue
       dispatch_stat(name, value, stat.type, config)
+  if "indices_stats" in config["stats"]:
+    for index_pattern in config["indices"]:
+      index = datetime.utcnow().strftime(index_pattern)
+      for name, stat in STATS_INDICES_STATS.iteritems():
+        try:
+          value = extract_value(json["indices_stats"], STATS_INDICES_STATS[name].path % index)
+        except Exception as err:
+          collectd.warning("Elasticsearch plugin ("+config["node"]+"): Could not process path "+STATS_INDICES_STATS[name].path+" for index "+index+": "+str(err))
+          continue
+        dispatch_stat(name % index.replace(".", "_"), value, stat.type, config)
 
 def dispatch_stat(stat_name, stat_value, stat_type, config):
   val = collectd.Values(plugin=config["node"])
@@ -230,15 +255,18 @@ def config_callback(config):
     elif config.key == "Name": node = str(config.values[0])
     elif config.key == "Timeout": timeout = int(config.values[0])
     elif config.key == "Stats": stats = config.values[0].split(" ")
+    elif config.key == "Indices": indices = config.values[0].split(" ")
     else: collectd.warning("Elasticsearch plugin: Unknown config key "+config.key)
     CONFIGS.append({
       "host": host,
       "port": port,
       "node": node,
-      "url_nodes": "http://"+host+":"+port+"/_node/stats",
+      "url_nodes_stats": "http://"+host+":"+port+"/_nodes/stats",
       "url_cluster_health": "http://"+host+":"+port+"/_cluster/health",
       "url_cluster_stats": "http://"+host+":"+port+"/_cluster/stats",
+      "url_indices_stats": "http://"+host+":"+port+"/_stats/store",
       "stats": stats,
+      "indices": indices,
       "timeout": timeout
     })
 

@@ -49,7 +49,8 @@ LoadPlugin python
     Host "localhost" # elasticsearch host, default is localhost
     Port 9200 # elasticsearch API port, default is 9200
     Name "elasticsearch" # instance name, default is elasticsearch
-    Stats "nodes_stats cluster_health cluster_stats" # space separated list of stats to fetch, available stats: nodes_stats, cluster_health, cluster_stats; all enabled by default
+    Stats "nodes_stats cluster_health cluster_stats indices_stats" # space separated list of stats to fetch, available stats: nodes_stats, cluster_health, cluster_stats, indices_stats; all enabled by default
+    Indices "logstash-%Y.%m.%d" # space separated index name templates for which stats will be collected, date mask should be in Python format; default is logstash-%Y.%m.%d
     Timeout 20 # stat fetching timeout in secs, default is 20
   </Module>
 <Plugin>
